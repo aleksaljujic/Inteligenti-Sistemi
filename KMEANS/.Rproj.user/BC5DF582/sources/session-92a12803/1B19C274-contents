@@ -311,3 +311,32 @@ getEvaluationMetrics <- function(cm){
 
 # Računamo evaluacione metrike na osnovu test skupa.
 getEvaluationMetrics(cm)
+
+# Evaluacija performansi modela:
+# --------------------------------
+# Accuracy = 0.60 (60%)
+#   - Model je tačno pogodio 60% svih primera.
+#   - To znači da je 40% instanci klasifikovano pogrešno.
+#
+# Precision = 0.636 (≈63.6%)
+#   - Kada model predvidi pozitivnu klasu ("Yes"),
+#     on je u pravu u oko 63.6% slučajeva.
+#   - Mera pouzdanosti pozitivnih predikcija.
+#
+# Recall = 0.636 (≈63.6%)
+#   - Model prepoznaje oko 63.6% svih stvarno pozitivnih primera.
+#   - Mera sposobnosti modela da "uhvati" pozitivne slučajeve.
+#
+# F1 = 0.636 (≈63.6%)
+#   - Harmonijska sredina Precision i Recall.
+#   - Pokazuje da su precision i recall u balansu,
+#     jer su približno jednaki.
+#
+# Interpretacija:
+#   - Model je nešto bolji od nasumičnog (random ~50% na balansiranom skupu).
+#   - Precision i Recall su ujednačeni, što znači da model
+#     nije pristrasan ka tome da favorizuje jednu klasu.
+#   - Ukupno: solidna, ali ne i sjajna performansa.
+#   - Zavisi od problema da li je ovo dovoljno dobro (npr.
+#     u medicini bi se tražio viši recall, u spam filterima viši precision).
+
