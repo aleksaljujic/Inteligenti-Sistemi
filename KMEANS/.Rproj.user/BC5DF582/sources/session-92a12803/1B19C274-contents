@@ -1,0 +1,241 @@
+#Ucitavanje podataka
+data <- read.csv("travel-times.csv", stringsAsFactors = F)
+#informacije po kolonama
+str(data)
+#statistike informacije po kolonama (mean,median, std,...)
+summary(data)
+
+#provera nedostajucih vrednosti
+# apply(data, MARGIN = 2, FUN = function(x) sum(is.na(x)))
+# apply(data, MARGIN = 2, function(x) sum(x==" "))
+# apply(data, 2, function(x) sum(x == "-"))
+# apply(data, 2, function(a) sum(a == ""))
+# ?apply
+
+#drugi lepsi i brzi nacin za proveru nedostajucih vrednosti
+colSums(data == "" | data == "-" | data == " " | is.na(data))
+
+#izbacivanje kolona
+data$Date <- NULL
+data$StartTime <- NULL
+data$DayOfWeek <- NULL
+
+#provera tipa podataka u koloni
+class(data$GoingTo)
+#provera vrednosti u koloni
+table(data$GoingTo)
+
+#eksplicitno pretavranje kolone u character variablu (mozeda i ne mora)
+data$GoingTo <- as.character(data$GoingTo)
+#zamena svih "" vrednosti sa vredinosti koja se najvise pojavljuje u koloni
+data$GoingTo[data$GoingTo == ""] <- "Work"
+#pretvaranje character varijable u faktorsku kako bi mogla da radi u modelu
+data$GoingTo <- factor(data$GoingTo, levels = c("Home", "Work"))
+
+#informacije po kolonama
+str(data)
+
+#pretavranje nedostajucih vrednosti u NA kako bi mogli da izracunamo medijanu
+data$FuelEconomy[data$FuelEconomy == "" | data$FuelEconomy == " " | data$FuelEconomy == "-" | is.na(data$FuelEconomy)] <- NA
+#pretvaranje kolone u numericku eksplicitno
+data$FuelEconomy <- as.numeric(data$FuelEconomy)
+
+#provera da li kolona ima normalnu raspodelu
+shapiro.test(na.omit(data$FuelEconomy))
+#shapiro.test(data$FuelEconomy[!is.na(data$FuelEconomy)])
+#saznanjem da kolona nema normalnu raspodelu jer je sig < 0.05 NA vrednosti menjamo medijanom kolone
+
+#kreiranje nove promenjive koja je medijana kolone
+medianFuelEconomy <- median(data$FuelEconomy, na.rm = T)
+
+#brisanje promenjive (samo primer)
+rm(meanFuelEconomy)
+
+#zameni svih NA vrednosti sa medijanom
+data$FuelEconomy[is.na(data$FuelEconomy)] <- medianFuelEconomy
+
+#kreiranje promenjive koja oznacava 60-ti percentil kolone
+percentil60 <- quantile(data$Congestion407, 0.6)
+percentil60
+
+#kreiranje target promenjive po principu ako je Congestion407 manji od 60-tog percentila 
+#i observacija nije unela komentar onda ce biti "Yes" u svim ostalim  slucajevima je "No"
+data$Take407All <- ifelse(data$Congestion407 < percentil60 & data$Comments == "",
+                          yes = "Yes", no = "No")
+
+#pretvaranje taget kolone u faktor
+data$Take407All <- as.factor(data$Take407All)
+
+#izbacivanje kolona koje su ucestvovale u kreiranju target kolone radi sprecavanje curenja podataka 
+#i nerealnih performansi modela
+data$Congestion407 <- NULL
+data$Comments <- NULL
+
+str(data)
+
+#iscratavnje box plot-a za kolonu MaxSpeed kako bi se utvrdilo postojanje outlajera
+boxplot(data$MaxSpeed)
+
+#statisticki zapis box plot-a
+boxplot.stats(data$MaxSpeed)
+
+#broj aoutlajera za datu kolonu
+length(boxplot.stats(data$MaxSpeed)$out)
+
+#provera za svaku kolonu koristeci apply funkciju
+apply(data, 2, function(x) boxplot.stats(data$MaxSpeed))
+apply(data[,2:8], 2, function(x) length(boxplot.stats(data$MaxSpeed)$out))
+
+?scale
+
+#posto svaka kolona ima autlajere onda ce da se uradi strandardizacija na svim numerickim kolonama
+data.std <- apply(data[,2:8], 2, function(x) scale(x, median(x), IQR(x)))
+
+#posto je izlaz iz funckije apply matrica sad se data.std pretvara u data frame
+data.std <- as.data.frame(data.std)
+
+#dodavanje faktorske varijable GoingTo u standardizovan dataset pretvaranjem u integer
+data.std$GoingTo <- as.integer(data$GoingTo) - 1
+#dodavanje target kolone standardizovanom datasetu
+data.std$Take407All <- data$Take407All
+
+#rasporedjivanje kolone po volji
+data.std <- data.std[,c(8,1:7,9)]
+
+str(data.std)
+
+summary(data.std)
+
+
+library(caret)
+#setovanje random seed-a na 1010
+set.seed(1010) 
+#podela seta na train i test,
+#list false da ne bi funckija vratila listu
+#indexes je niz brojeva odnosno indexa koji ce uci u train set stim da proporcija medju klasama u train setu
+#bude priblizno ista kao i proporcija klasa u test setu 
+indexes <- createDataPartition(data.std$Take407All, p = 0.8, list = FALSE)
+#train uzma samo 80% indexa koju je vratila funckija za kreiranje particija
+train.data <- data.std[indexes, ]
+#test uzima ostalih 20%
+test.data <- data.std[-indexes, ]
+
+#provera proprcionalnosti klasa standadrizovanog dataseta u odnosu na train set i test set
+prop.table(table(data.std$Take407All))
+prop.table(table(train.data$Take407All))
+prop.table(table(test.data$Take407All))
+
+library(e1071)
+
+# Definiše strategiju validacije modela:
+# koristi se kros-validacija (cross-validation) sa 10 podela (10-fold CV).
+# To znači da se skup podataka deli na 10 delova, 9 se koristi za treniranje,
+# a 1 za validaciju, i tako sve dok svaki deo jednom ne bude validacioni.
+numFolds <- trainControl(method = "cv", number = 10)
+
+# Postavlja seme generatora slučajnih brojeva kako bi se obezbedila
+# reproduktivnost eksperimenata — tj. da svaki put dobijemo istu podelu podataka.
+set.seed(1010)
+
+# Priprema mrežu vrednosti hiperparametra k (broj suseda u KNN algoritmu).
+# Grid ide od 3 do 15, u koracima od 2. Ovaj skup vrednosti služi
+# za sistematsko ispitivanje različitih varijanti modela.
+kGrid  <- expand.grid(.k = seq(from = 3, to = 15, by = 2))
+
+# Treniranje KNN klasifikatora:
+# - Ulazne promenljive (predictors) su prvih 8 kolona iz trening skupa.
+# - Izlazna (target) promenljiva je klasa Take407All.
+# - Metod je "knn" (k-nearest neighbors), algoritam koji predviđa klasu
+#   posmatranja na osnovu većine klasa među k najbližih suseda.
+# - Kros-validacija (numFolds) obezbeđuje procenu generalizacione greške
+#   i smanjuje rizik od overfittinga.
+# - Grid pretraga (kGrid) omogućava izbor vrednosti k koja daje najbolje performanse.
+crossvalidation <- train(
+  x = train.data[, c(1:8)],
+  y = train.data$Take407All,
+  method = "knn",
+  trControl = numFolds,
+  tuneGrid = kGrid
+)
+
+crossvalidation
+
+#graficki prikaz promene tacnosti u odnosu na rast suseda
+plot(crossvalidation)
+
+#pamcenje najboljeg broja suseda
+bestK <- crossvalidation$bestTune$k
+bestK
+
+
+# Učitava se paket "class" koji sadrži osnovnu implementaciju KNN algoritma.
+library(class)
+
+# Treniranje i predikcija pomoću KNN-a:
+# - train = train.data[,-9] : koristi sve kolone osim 9. (pretpostavlja se da je 9. kolona target).
+# - test = test.data[,-9]   : test skup, takođe bez target kolone.
+# - cl = train.data$Take407All : stvarne klase iz trening skupa (potrebne za učenje).
+# - k = 13 : broj najbližih suseda koje algoritam koristi pri klasifikaciji.
+# Rezultat je vektor predikovanih klasa za test skup.
+knn.pred <- knn(train = train.data[,-9], 
+                test = test.data[,-9] ,
+                cl = train.data$Take407All, 
+                k = 13)
+
+# Ispis predikcija
+knn.pred
+
+# Konfuziona matrica:
+# redovi = stvarne klase iz test skupa,
+# kolone = predikovane klase iz KNN-a.
+# Matrica prikazuje koliko primera je ispravno klasifikovano, a koliko pogrešno.
+cm <- table(test.data$Take407All, knn.pred)
+cm
+
+getEvaluationMetrics <- function(cm){
+  
+  # Ekstrakcija vrednosti iz konfuzione matrice:
+  # TP = true positives, TN = true negatives
+  # FP = false positives, FN = false negatives
+  TP <- cm[2,2]
+  TN <- cm[1,1]
+  FP <- cm[1,2]
+  FN <- cm[2,1]
+  
+  # Accuracy = udeo tačno klasifikovanih instanci
+  accuracy  <- (TP+TN)/(TP+TN+FP+FN)
+  
+  # Precision = koliko predikcija za pozitivnu klasu je zaista bilo tačno
+  precision <- TP/(TP+FP)
+  
+  # Recall (osetljivost) = koliko stvarno pozitivnih je model prepoznao
+  recall <- TP/(TP+FN)
+  
+  # F1-score = harmonijska sredina preciznosti i osetljivosti
+  f1 <- (2*precision*recall)/(precision+recall)
+  
+  # Funkcija vraća sve metrike u obliku vektora
+  c(
+    accuracy = accuracy,
+    precision = precision,
+    recall = recall,
+    f1 = f1
+  )
+}
+
+# Pozivanje funkcije za dobijenu konfuzionu matricu
+getEvaluationMetrics(cm)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
