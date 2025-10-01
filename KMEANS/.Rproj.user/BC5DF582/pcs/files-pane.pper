@@ -1,9 +1,9 @@
 {
-    "path" : "C:/Users/aleks/Inteligentni/KMEANS",
-    "sortOrder" : [
+    "path": "C:/Users/aleks/Inteligentni/KMEANS",
+    "sortOrder": [
         {
-            "ascending" : true,
-            "columnIndex" : 2
+            "ascending": true,
+            "columnIndex": 2
         }
     ]
 }
