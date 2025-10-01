@@ -86,9 +86,23 @@ data_cleaned <- data_cleaned[,c(17,1:16)]
 # Pregled dataset-a posle svih transformacija
 str(data_cleaned)
 
+# Pregled vrednosti ocena
+table(data_cleaned$User_Score)
+
+# Broj ocena koje nedostaju ili su tbd
+sum(data_cleaned$User_Score == "" | data_cleaned$User_Score == "tbd")
+
+# Uzimaju se samo observacije koje imaju popunjenu ocenu
+data_cleaned <- subset(data_cleaned, User_Score != "" & User_Score != "tbd")
+
+# Provera da li jos uvek ima ocena da nedostaju
+sum(data_cleaned$User_Score == "" | data_cleaned$User_Score == "tbd" | is.na(data_cleaned$User_Score))
+
 # Konvertujemo User_Score iz char u numerički tip
 # Teorija: regresija zahteva numerički target
-data_cleaned$User_Score <- as.numeric(as.character(data$User_Score))
+data_cleaned$User_Score <- as.numeric(as.character(data_cleaned$User_Score))
+
+
 
 # Proveravamo razne oblike nedostajućih vrednosti u kolonama
 colSums(data_cleaned[,9:17] == "", na.rm=T)
@@ -96,9 +110,6 @@ colSums(data_cleaned[,9:17] == " ", na.rm=T)
 colSums(data_cleaned[,9:17] == "-", na.rm=T)
 colSums(data_cleaned[,9:17] == "N/A", na.rm=T)
 colSums(is.na(data_cleaned[,9:17]))
-
-# User_Score = 1 tretiramo kao outlier → pretvaramo u NA
-data_cleaned$User_Score[data_cleaned$User_Score == 1] <- NA
 
 # Ponovna provera broja NA vrednosti
 colSums(is.na(data_cleaned[,9:17]))
@@ -110,11 +121,6 @@ shapiro.test(data_cleaned$User_Score)
 # Pošto nije normalno → imputacija medianom
 userScoreMedian <- median(data_cleaned$User_Score, na.rm=T)
 data_cleaned$User_Score[is.na(data_cleaned$User_Score)] <- userScoreMedian
-
-# Isto radimo za User_Count
-shapiro.test(data_cleaned$User_Count)
-userCountMedian <- median(data_cleaned$User_Count, na.rm=T)
-data_cleaned$User_Count[is.na(data_cleaned$User_Count)] <- userCountMedian
 
 # Isto za Critic_Count
 shapiro.test(data_cleaned$Critic_Count)
@@ -230,7 +236,7 @@ r_squared <- 1 - RSS / TSS
 r_squared
 
 # Pogledamo osnovni rezime lm4 modela
-summary(lm4)
+#summary(lm4)
 
 # RMSE = Root Mean Squared Error
 # Standardna metrika koja pokazuje prosečno odstupanje predikcije od stvarnih vrednosti
