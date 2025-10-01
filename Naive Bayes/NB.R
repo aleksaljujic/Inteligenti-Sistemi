@@ -83,7 +83,7 @@ indexes <- createDataPartition(data$price_category, p = 0.8, list = FALSE)
 train.data <- data[indexes, ] 
 test.data <- data[-indexes, ] 
 
- library(e1071)
+library(e1071)
 
 nb <- naiveBayes(price_category ~ ., data = train.data)
 
@@ -119,28 +119,45 @@ nb2.pred.prob <- predict(object = nb,
                   newdata = test.data,
                   type = "raw") 
 
+nb2.pred.prob
 
 library(pROC)
-nb2.roc <- 
-           roc(response = test.data$price_category>,
-           predictor = nb2[, <1 | 2>]
-           class!)
-# <ROC curve parameters>$auc # extract and show AUC
-# plot.roc(<ROC curve parameters>, # computed in the previous step
-# print.thres = TRUE, # show the probability threshold (cut-off point) on the plot
-# print.thres.best.method =
-# "youden" | # maximize the sum of sensitivity and specificity (the distance to the
-diag. line)
-# "closest.topleft") # minimize the distance to the top-left point of the plot
-# <ROC coords> <- coords(<ROC curve parameters>, # computed in the previous step
-# ret = c("accuracy", "spec", "sens", "thr", ...), # ROC curve parameters to return
-# x = # the coordinates to look for:
-# "local maximas" | # local maximas of the ROC curve
-# "best" | ...) # the point with the best sum of sensitivity and
-specificity, i.e.
-# # the same as the one shown on the ROC curve
+nb2.roc <- roc(response = as.integer(test.data$price_category),
+           predictor = nb2.pred.prob[,1],
+           levels = c(2,1))
+nb2.roc$auc
+plot.roc(nb2.roc,
+        print.thres = TRUE,
+        print.thres.best.method ="youden")
 
+
+nb2.coords <- coords(
+  nb2.roc,
+  ret = c("accuracy", "specificity", "sensitivity", "threshold"),
+  x = "local maximas"
+)
+
+nb2.coords
   
+
+prob.treshold <- nb2.coords[19,4]  
+
+nb2.pred <- ifelse(nb2.pred.prob[,1] >= prob.treshold, yes="cheap", no="no_cheap ")
+  
+  
+nb2.pred <- as.factor(nb2.pred)
+
+nb2.cm <- table(true = test.data$price_category, predicted = nb2.pred)
+
+nb1.cm
+nb2.cm
+
+nb2.eval <- getEvaluationMetrics(nb2.cm)
+
+nb1.eval
+nb2.eval
+
+data.frame(rbind(nb1.eval, nb2.eval), row.names = c("one","two"))
   
   
   
